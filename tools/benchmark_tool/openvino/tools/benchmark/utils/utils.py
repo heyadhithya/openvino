@@ -393,17 +393,17 @@ def print_perf_counters_sort(perf_counts_list,sort_flag="sort"):
             total_time += pi.real_time
             total_time_cpu += pi.cpu_time
 
-        total_time = total_time.microseconds
-        total_time_cpu = total_time_cpu.microseconds
+        total_time = total_time / timedelta(microseconds=1)
+        total_time_cpu = total_time_cpu / timedelta(microseconds=1)
         total_real_time_proportion = 0
         total_detail_data=[]
         for pi in perf_counts:
             node_name = pi.node_name
             layerStatus = pi.status
             layerType = pi.node_type
-            real_time = pi.real_time.microseconds
-            cpu_time = pi.cpu_time.microseconds
-            real_proportion = round(real_time/total_time,4)
+            real_time = pi.real_time / timedelta(microseconds=1)
+            cpu_time = pi.cpu_time / timedelta(microseconds=1)
+            real_proportion = round(real_time/total_time,4) if total_time else 0
             execType = pi.exec_type
             tmp_data=[node_name,layerStatus,layerType,real_time,cpu_time,real_proportion,execType]
             total_detail_data.append(tmp_data)
