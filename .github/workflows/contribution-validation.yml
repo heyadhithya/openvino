@@ -1,0 +1,59 @@
+name: Contribution validation
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Exact contribution commit to test
+        required: true
+        default: 09a38a06f34f56a0151571daff4c62af3b2c7aef
+permissions:
+  contents: read
+jobs:
+  benchmark-cpu:
+    name: Python ${{ matrix.python }} benchmark CPU
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.11', '3.12', '3.13']
+    env:
+      PYTHONPATH: tools/benchmark_tool
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Record tested commit
+        run: git rev-parse HEAD
+      - name: Install CPU runtime and test/build tools
+        run: python -m pip install openvino==2026.4.1 numpy==2.4.6 pytest build
+      - name: Test benchmark utilities
+        run: python -m pytest -q tools/benchmark_tool/unit_tests
+      - name: Build benchmark wheel
+        run: python -m build --wheel --outdir dist tools/benchmark_tool
+      - name: Generate tiny identity model
+        run: |
+          python - <<'PYCODE'
+          import inspect
+          from pathlib import Path
+          import numpy as np
+          import openvino as ov
+          from openvino.tools.benchmark.utils import utils
+          print('Runtime:', ov.__version__)
+          print('Tested source:', inspect.getfile(utils))
+          Path('smoke').mkdir()
+          p = ov.opset13.parameter([1], np.float32, name='x')
+          ov.serialize(ov.Model([p], [p], 'identity'), 'smoke/identity.xml')
+          PYCODE
+      - name: Smoke test all profiler sorting modes
+        shell: bash
+        run: |
+          for mode in sort no_sort simple_sort; do
+            python tools/benchmark_tool/benchmark_app.py -m smoke/identity.xml -d CPU -api sync -niter 1 -nireq 1 -nthreads 2 -hint none -pcsort "$mode"
+          done
+      - name: Check patch whitespace
+        run: git diff --check HEAD^ HEAD
